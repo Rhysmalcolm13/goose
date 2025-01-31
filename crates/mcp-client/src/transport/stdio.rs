@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::process::Stdio;
 use std::sync::Arc;
 use tokio::process::{Child, ChildStderr, ChildStdin, ChildStdout, Command};
 
@@ -196,31 +197,28 @@ impl StdioTransport {
     }
 
     async fn spawn_process(&self) -> Result<(Child, ChildStdin, ChildStdout, ChildStderr), Error> {
-        let mut process = Command::new(&self.command)
+        let mut command = Command::new(&self.command);
+        command
             .envs(&self.env)
             .args(&self.args)
-            .stdin(std::process::Stdio::piped())
-            .stdout(std::process::Stdio::piped())
-            .stderr(std::process::Stdio::piped())
-            .kill_on_drop(true)
-            // 0 sets the process group ID equal to the process ID
-            .process_group(0) // don't inherit signal handling from parent process
-            .spawn()
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .kill_on_drop(true);
+
+        #[cfg(unix)]
+        {
+            command.process_group(0);
+        }
+
+        let mut process = command.spawn()
             .map_err(|e| Error::StdioProcessError(e.to_string()))?;
 
-        let stdin = process
-            .stdin
-            .take()
+        let stdin = process.stdin.take()
             .ok_or_else(|| Error::StdioProcessError("Failed to get stdin".into()))?;
-
-        let stdout = process
-            .stdout
-            .take()
+        let stdout = process.stdout.take()
             .ok_or_else(|| Error::StdioProcessError("Failed to get stdout".into()))?;
-
-        let stderr = process
-            .stderr
-            .take()
+        let stderr = process.stderr.take()
             .ok_or_else(|| Error::StdioProcessError("Failed to get stderr".into()))?;
 
         Ok((process, stdin, stdout, stderr))

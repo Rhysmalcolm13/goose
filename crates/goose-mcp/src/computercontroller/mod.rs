@@ -3,9 +3,11 @@ use indoc::{formatdoc, indoc};
 use reqwest::{Client, Url};
 use serde_json::{json, Value};
 use std::{
-    collections::HashMap, fs, future::Future, os::unix::fs::PermissionsExt, path::PathBuf,
+    collections::HashMap, fs, future::Future, path::PathBuf,
     pin::Pin, sync::Arc, sync::Mutex,
 };
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
 use tokio::process::Command;
 
 use mcp_core::{
@@ -19,7 +21,9 @@ use mcp_server::router::CapabilitiesBuilder;
 use mcp_server::Router;
 
 /// An extension designed for non-developers to help them with common tasks like
-/// web scraping, data processing, and automation.
+/// web scraping, data processing, and automation and computer control without requiring programming expertise,
+/// supplementing the Developer Extension.
+
 #[derive(Clone)]
 pub struct ComputerControllerRouter {
     tools: Vec<Tool>,
@@ -281,6 +285,12 @@ impl ComputerControllerRouter {
         let cache_path = self.get_cache_path(prefix, extension);
         fs::write(&cache_path, content)
             .map_err(|e| ToolError::ExecutionError(format!("Failed to write to cache: {}", e)))?;
+        #[cfg(unix)]
+        {
+            fs::set_permissions(&cache_path, fs::Permissions::from_mode(0o755)).map_err(
+                |e| ToolError::ExecutionError(format!("Failed to set script permissions: {}", e)),
+            )?;
+        }
         Ok(cache_path)
     }
 
@@ -442,14 +452,12 @@ impl ComputerControllerRouter {
                     ToolError::ExecutionError(format!("Failed to write script: {}", e))
                 })?;
 
-                fs::set_permissions(&script_path, fs::Permissions::from_mode(0o755)).map_err(
-                    |e| {
-                        ToolError::ExecutionError(format!(
-                            "Failed to set script permissions: {}",
-                            e
-                        ))
-                    },
-                )?;
+                #[cfg(unix)]
+                {
+                    fs::set_permissions(&script_path, fs::Permissions::from_mode(0o755)).map_err(
+                        |e| ToolError::ExecutionError(format!("Failed to set script permissions: {}", e)),
+                    )?;
+                }
 
                 script_path.display().to_string()
             }

@@ -56,7 +56,7 @@ pub fn format_messages(messages: &[Message]) -> Vec<Value> {
                                 let abridged: Vec<_> = contents
                                     .iter()
                                     .filter(|content| {
-                                        content.audience().is_none_or(|audience| {
+                                        content.audience().map_or(true, |audience| {
                                             audience.contains(&Role::Assistant)
                                         })
                                     })

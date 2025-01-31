@@ -1,0 +1,4 @@
+owner: rhysmalcolm
+repo: goose
+provider: github
+updaterCacheDirName: goose-updater

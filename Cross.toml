@@ -27,3 +27,17 @@ pre-build = [
      libxcb1-dev \
     """
 ]
+
+[target.x86_64-pc-windows-msvc]
+xargo = false
+pre-build = [
+    "rustup target add x86_64-pc-windows-msvc"
+]
+
+[target.aarch64-pc-windows-msvc]
+xargo = false
+pre-build = [
+    "rustup target add aarch64-pc-windows-msvc",
+    "choco install -y llvm --version=17.0.6",
+    "choco install -y visualstudio2022buildtools --package-parameters=\"--add Microsoft.VisualStudio.Component.VC.Tools.ARM64\""
+]

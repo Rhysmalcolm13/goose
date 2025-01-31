@@ -1,0 +1,5 @@
+owner: rhysmalcolm
+repo: goose
+provider: generic
+url: http://localhost:8080/updates
+updaterCacheDirName: goose-updater

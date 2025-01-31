@@ -12,6 +12,7 @@ import {
   powerSaveBlocker,
   Tray,
 } from 'electron';
+import { autoUpdater } from 'electron-updater';
 import started from 'electron-squirrel-startup';
 import path from 'node:path';
 import { startGoosed } from './goosed';
@@ -30,6 +31,61 @@ const { exec } = require('child_process');
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (started) app.quit();
+
+// Configure auto updater
+autoUpdater.logger = log;
+autoUpdater.autoDownload = true;
+autoUpdater.autoInstallOnAppQuit = true;
+
+// Handle auto-updater events
+autoUpdater.on('checking-for-update', () => {
+  log.info('Checking for updates...');
+});
+
+autoUpdater.on('update-available', (info) => {
+  log.info('Update available:', info);
+  dialog.showMessageBox({
+    type: 'info',
+    title: 'Update Available',
+    message: 'A new version of Goose is available. Would you like to download it now?',
+    buttons: ['Yes', 'No'],
+    defaultId: 0
+  }).then(({ response }) => {
+    if (response === 0) {
+      autoUpdater.downloadUpdate();
+    }
+  });
+});
+
+autoUpdater.on('update-not-available', (info) => {
+  log.info('Update not available:', info);
+});
+
+autoUpdater.on('error', (err) => {
+  log.error('Error in auto-updater:', err);
+});
+
+autoUpdater.on('download-progress', (progressObj) => {
+  let message = `Download speed: ${progressObj.bytesPerSecond}`;
+  message = `${message} - Downloaded ${progressObj.percent}%`;
+  message = `${message} (${progressObj.transferred}/${progressObj.total})`;
+  log.info(message);
+});
+
+autoUpdater.on('update-downloaded', (info) => {
+  log.info('Update downloaded:', info);
+  dialog.showMessageBox({
+    type: 'info',
+    title: 'Update Ready',
+    message: 'A new version has been downloaded. Restart Goose to apply the updates.',
+    buttons: ['Restart', 'Later'],
+    defaultId: 0
+  }).then(({ response }) => {
+    if (response === 0) {
+      autoUpdater.quitAndInstall();
+    }
+  });
+});
 
 // Triggered when the user opens "goose://..." links
 app.on('open-url', async (event, url) => {
@@ -138,91 +194,60 @@ let windowCounter = 0;
 const windowMap = new Map<number, BrowserWindow>();
 
 const createChat = async (app, query?: string, dir?: string, version?: string) => {
-  const env = version ? { GOOSE_AGENT_VERSION: version } : {};
+  try {
+    log.info('Creating chat window...');
+    const env = version ? { GOOSE_AGENT_VERSION: version } : {};
 
-  // Apply current environment settings before creating chat
-  updateEnvironmentVariables(envToggles);
+    // Apply current environment settings before creating chat
+    updateEnvironmentVariables(envToggles);
 
-  const [port, working_dir, goosedProcess] = await startGoosed(app, dir);
+    const [port, working_dir, goosedProcess] = await startGoosed(app, dir);
+    appConfig.GOOSE_PORT = port;
 
-  const mainWindow = new BrowserWindow({
-    titleBarStyle: 'hidden',
-    trafficLightPosition: { x: 16, y: 10 },
-    vibrancy: 'window',
-    frame: false,
-    width: 750,
-    height: 800,
-    minWidth: 650,
-    minHeight: 800,
-    transparent: false,
-    useContentSize: true,
-    icon: path.join(__dirname, '../images/icon'),
-    webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
-      additionalArguments: [
-        JSON.stringify({
-          ...appConfig,
-          GOOSE_PORT: port,
-          GOOSE_WORKING_DIR: working_dir,
-          REQUEST_DIR: dir,
-        }),
-      ],
-      partition: 'persist:goose', // Add this line to ensure persistence
-    },
-  });
-
-  // Load the index.html of the app.
-  const queryParam = query ? `?initialQuery=${encodeURIComponent(query)}` : '';
-  const { screen } = require('electron');
-  const primaryDisplay = screen.getPrimaryDisplay();
-  const { width } = primaryDisplay.workAreaSize;
-
-  // Increment window counter to track number of windows
-  const windowId = ++windowCounter;
-  const direction = windowId % 2 === 0 ? 1 : -1; // Alternate direction
-  const initialOffset = 50;
-
-  // Set window position with alternating offset strategy
-  const baseXPosition = Math.round(width / 2 - mainWindow.getSize()[0] / 2);
-  const xOffset = direction * initialOffset * Math.floor(windowId / 2);
-  mainWindow.setPosition(baseXPosition + xOffset, 100);
-
-  if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
-    mainWindow.loadURL(`${MAIN_WINDOW_VITE_DEV_SERVER_URL}${queryParam}`);
-  } else {
-    mainWindow.loadFile(path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`), {
-      search: queryParam.slice(1),
+    // Create the browser window.
+    const chatWindow = new BrowserWindow({
+      width: 1200,
+      height: 800,
+      webPreferences: {
+        preload: path.join(__dirname, 'preload.js'),
+        additionalArguments: [JSON.stringify(appConfig)],
+        partition: 'persist:goose',
+        contextIsolation: true,
+        nodeIntegration: true
+      },
+      show: false,
     });
+
+    // Assign window ID and track it
+    const windowId = windowCounter++;
+    windowMap.set(windowId, chatWindow);
+
+    chatWindow.once('ready-to-show', () => {
+      log.info('Chat window ready to show');
+      chatWindow.show();
+    });
+
+    // Handle window errors
+    chatWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
+      log.error('Window failed to load:', errorDescription);
+      dialog.showErrorBox('Error', `Failed to load application: ${errorDescription}`);
+    });
+
+    const chatParams = query ? `?q=${encodeURIComponent(query)}` : '';
+    if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
+      await chatWindow.loadURL(`${MAIN_WINDOW_VITE_DEV_SERVER_URL}${chatParams}`);
+    } else {
+      await chatWindow.loadFile(
+        path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html${chatParams}`)
+      );
+    }
+
+    return [chatWindow, goosedProcess];
+  } catch (error) {
+    log.error('Error creating chat window:', error);
+    dialog.showErrorBox('Error', `Failed to create application window: ${error.message}`);
+    throw error;
   }
-
-  // DevTools shortcut management
-  const registerDevToolsShortcut = (window: BrowserWindow) => {
-    globalShortcut.register('Alt+Command+I', () => {
-      window.webContents.openDevTools();
-    });
-  };
-
-  const unregisterDevToolsShortcut = () => {
-    globalShortcut.unregister('Alt+Command+I');
-  };
-
-  // Register shortcut when window is focused
-  mainWindow.on('focus', () => {
-    registerDevToolsShortcut(mainWindow);
-  });
-
-  // Unregister shortcut when window loses focus
-  mainWindow.on('blur', () => {
-    unregisterDevToolsShortcut();
-  });
-
-  windowMap.set(windowId, mainWindow);
-  mainWindow.on('closed', () => {
-    windowMap.delete(windowId);
-    unregisterDevToolsShortcut();
-    goosedProcess.kill();
-  });
-  return mainWindow;
 };
 
 const createTray = () => {
@@ -366,15 +391,6 @@ ipcMain.handle('check-ollama', async () => {
 });
 
 app.whenReady().then(async () => {
-  // Test error feature - only enabled with GOOSE_TEST_ERROR=true
-  if (process.env.GOOSE_TEST_ERROR === 'true') {
-    console.log('Test error feature enabled, will throw error in 5 seconds');
-    setTimeout(() => {
-      console.log('Throwing test error now...');
-      throw new Error('Test error: This is a simulated fatal error after 5 seconds');
-    }, 5000);
-  }
-
   // Parse command line arguments
   const { dirPath } = parseArgs();
 

@@ -1,37 +1,47 @@
-import { MakerSquirrel } from '@electron-forge/maker-squirrel';
-import { AutoUnpackNativesPlugin } from '@electron-forge/plugin-auto-unpack-natives';
-import { VitePlugin } from '@electron-forge/plugin-vite';
+const { VitePlugin } = require('@electron-forge/plugin-vite');
+const { AutoUnpackNativesPlugin } = require('@electron-forge/plugin-auto-unpack-natives');
 
-export default {
+module.exports = {
   packagerConfig: {
     name: 'Goose',
     executableName: 'Goose',
     asar: true,
     icon: './src/images/icon',
-    extraResource: './app-update.yml',
-    platform: ['win32']
+    extraResource: './app-update.yml'
   },
   rebuildConfig: {},
   makers: [
     {
       name: '@electron-forge/maker-squirrel',
-      platforms: ['win32'],
       config: {
         name: 'Goose',
-        setupIcon: './src/images/icon.ico'
+        setupIcon: './src/images/icon.ico',
+        authors: 'Goose Team'
       }
     }
   ],
   plugins: [
     new AutoUnpackNativesPlugin({}),
     new VitePlugin({
-      build: [{
-        entry: 'src/main.ts',
-        config: 'vite.main.config.ts',
-      }, {
-        entry: 'src/renderer.tsx',
-        config: 'vite.renderer.config.ts',
-      }],
+      // Single build source
+      build: [
+        {
+          // Main process entry point
+          entry: 'src/main.ts',
+          config: 'vite.main.config.ts',
+        },
+        {
+          // Renderer process entry point
+          entry: 'src/renderer.tsx',
+          config: 'vite.renderer.config.ts',
+        }
+      ],
+      renderer: [
+        {
+          name: 'main_window',
+          config: 'vite.renderer.config.ts',
+        }
+      ]
     })
   ],
   hooks: {

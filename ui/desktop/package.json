@@ -1,7 +1,7 @@
 {
   "name": "goose-app",
   "productName": "Goose",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Goose App",
   "main": ".vite/build/main.js",
   "scripts": {
@@ -10,6 +10,8 @@
     "start:test-error": "GOOSE_TEST_ERROR=true electron-forge start",
     "package": "electron-forge package",
     "make": "electron-forge make",
+    "make:win": "electron-forge make --platform win32",
+    "publish": "electron-forge publish",
     "bundle:default": "npm run make && cd out/Goose-darwin-arm64 && ditto -c -k --sequesterRsrc --keepParent Goose.app Goose.zip",
     "debug": "echo 'run --remote-debugging-port=8315' && lldb out/Goose-darwin-arm64/Goose.app",
     "test-e2e": "electron-forge start > /tmp/out.txt & ELECTRON_PID=$! && sleep 12 && if grep -q 'renderer: ChatWindow loaded' /tmp/out.txt; then echo 'process is running'; pkill -f electron; else echo 'not starting correctly'; cat /tmp/out.txt; pkill -f electron; exit 1; fi",
@@ -21,13 +23,14 @@
   },
   "devDependencies": {
     "@electron-forge/cli": "^7.5.0",
-    "@electron-forge/maker-deb": "^7.5.0",
-    "@electron-forge/maker-rpm": "^7.5.0",
-    "@electron-forge/maker-squirrel": "^7.5.0",
-    "@electron-forge/maker-zip": "^7.5.0",
-    "@electron-forge/plugin-auto-unpack-natives": "^7.5.0",
-    "@electron-forge/plugin-fuses": "^7.5.0",
-    "@electron-forge/plugin-vite": "^7.5.0",
+    "@electron-forge/maker-deb": "^7.6.1",
+    "@electron-forge/maker-rpm": "^7.6.1",
+    "@electron-forge/maker-squirrel": "^7.6.1",
+    "@electron-forge/maker-zip": "^7.6.1",
+    "@electron-forge/plugin-auto-unpack-natives": "^7.6.1",
+    "@electron-forge/plugin-fuses": "^7.6.1",
+    "@electron-forge/plugin-vite": "^7.6.1",
+    "@electron-forge/publisher-github": "^7.6.1",
     "@electron/fuses": "^1.8.0",
     "@eslint/js": "^8.56.0",
     "@tailwindcss/typography": "^0.5.15",
@@ -39,6 +42,7 @@
     "@vitejs/plugin-react": "^4.3.3",
     "autoprefixer": "^10.4.20",
     "electron": "33.1.0",
+    "electron-updater": "^6.3.9",
     "eslint": "^8.56.0",
     "eslint-plugin-react": "^7.33.2",
     "eslint-plugin-react-hooks": "^4.6.0",
@@ -95,6 +99,44 @@
     "react-toastify": "^8.0.0",
     "tailwind-merge": "^2.5.4",
     "tailwindcss-animate": "^1.0.7",
-    "unist-util-visit": "^5.0.0"
+    "unist-util-visit": "^5.0.0",
+    "update-electron-app": "^3.1.1"
+  },
+  "config": {
+    "forge": "./forge.config.js"
+  },
+  "build": {
+    "appId": "com.rhysmalcolm.goose",
+    "productName": "Goose",
+    "directories": {
+      "output": "dist"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "rhysmalcolm",
+      "repo": "goose"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ],
+      "icon": "src/images/icon.ico",
+      "publisherName": "Goose Team"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": false,
+      "deleteAppDataOnUninstall": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Goose"
+    }
   }
 }

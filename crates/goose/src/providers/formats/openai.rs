@@ -64,7 +64,7 @@ pub fn format_messages(messages: &[Message], image_format: &ImageFormat) -> Vec<
                                 .filter(|content| {
                                     content
                                         .audience()
-                                        .is_none_or(|audience| audience.contains(&Role::Assistant))
+                                        .map_or(true, |audience| audience.contains(&Role::Assistant))
                                 })
                                 .map(|content| content.unannotated())
                                 .collect();
